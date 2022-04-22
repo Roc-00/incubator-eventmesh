@@ -17,6 +17,8 @@
 
 package org.apache.eventmesh.util;
 
+import org.apache.eventmesh.common.ExampleConstants;
+
 import org.apache.commons.lang3.SystemUtils;
 
 import java.io.InputStream;
@@ -66,7 +68,7 @@ public class Utils {
                          enumIpAddr.hasMoreElements(); ) {
                         InetAddress inetAddress = enumIpAddr.nextElement();
                         if (!inetAddress.isLoopbackAddress()) {
-                            String ipaddress = inetAddress.getHostAddress().toString();
+                            String ipaddress = inetAddress.getHostAddress();
                             if (!ipaddress.contains("::") && !ipaddress.contains("0:0:")
                                     && !ipaddress.contains("fe80")) {
                                 ip = ipaddress;
@@ -76,7 +78,7 @@ public class Utils {
                 }
             }
         } catch (SocketException ex) {
-            ip = "127.0.0.1";
+            ip = ExampleConstants.DEFAULT_EVENTMESH_IP;
             ex.printStackTrace();
         }
         return ip;

@@ -46,6 +46,7 @@ import org.apache.eventmesh.runtime.util.RemotingHelper;
 
 import org.apache.commons.lang3.StringUtils;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
@@ -152,6 +153,19 @@ public class ReplyMessageProcessor implements HttpRequestProcessor {
             return;
         }
 
+        String content = new String(event.getData().toBytes(), StandardCharsets.UTF_8);
+        if (content.length() > eventMeshHTTPServer.getEventMeshHttpConfiguration().eventMeshEventSize) {
+            httpLogger.error("Event size exceeds the limit: {}",
+                eventMeshHTTPServer.getEventMeshHttpConfiguration().eventMeshEventSize);
+
+            responseEventMeshCommand = asyncContext.getRequest().createHttpCommandResponse(
+                replyMessageResponseHeader,
+                ReplyMessageResponseBody.buildBody(EventMeshRetCode.EVENTMESH_PROTOCOL_BODY_ERR.getRetCode(),
+                    "Event size exceeds the limit: " + eventMeshHTTPServer.getEventMeshHttpConfiguration().eventMeshEventSize));
+            asyncContext.onComplete(responseEventMeshCommand);
+            return;
+        }
+
         EventMeshProducer eventMeshProducer = eventMeshHTTPServer.getProducerManager().getEventMeshProducer(producerGroup);
 
         if (!eventMeshProducer.getStarted().get()) {
@@ -165,15 +179,11 @@ public class ReplyMessageProcessor implements HttpRequestProcessor {
 
         long startTime = System.currentTimeMillis();
 
-        //Message rocketMQMsg;
-        //Message omsMsg = new Message();
         String replyTopic = EventMeshConstants.RR_REPLY_TOPIC;
 
         String origTopic = event.getSubject();
 
-        //Map<String, String> extFields = replyMessageRequestBody.getExtFields();
         final String replyMQCluster = event.getExtension(EventMeshConstants.PROPERTY_MESSAGE_CLUSTER).toString();
-        //final String replyMQCluster = MapUtils.getString(extFields, EventMeshConstants.PROPERTY_MESSAGE_CLUSTER, null);
         if (!org.apache.commons.lang3.StringUtils.isEmpty(replyMQCluster)) {
             replyTopic = replyMQCluster + "-" + replyTopic;
         } else {
@@ -195,33 +205,6 @@ public class ReplyMessageProcessor implements HttpRequestProcessor {
                     .withExtension(EventMeshConstants.REQ_C2EVENTMESH_TIMESTAMP, String.valueOf(System.currentTimeMillis()))
                     .build();
 
-            //omsMsg.setTopic(replyTopic);
-            // topic
-            //omsMsg.putSystemProperties(Constants.PROPERTY_MESSAGE_DESTINATION, replyTopic);
-            //if (!StringUtils.isBlank(sendMessageRequestBody.getTag())) {
-            //    omsMsg.putUserHeaders("Tag", sendMessageRequestBody.getTag());
-            //}
-            //rocketMQMsg = new Message(replyTopic,
-            //        replyMessageRequestBody.getContent().getBytes(EventMeshConstants.DEFAULT_CHARSET));
-            //omsMsg.putUserProperties("msgType", "persistent");
-            //rocketMQMsg.putUserProperty(DeFiBusConstant.KEY, DeFiBusConstant.PERSISTENT);
-            //for (Map.Entry<String, String> entry : extFields.entrySet()) {
-            //    omsMsg.putUserProperties(entry.getKey(), entry.getValue());
-            //}
-            //
-            ////for rocketmq support
-            //MessageAccessor.putProperty(rocketMQMsg, MessageConst.PROPERTY_MESSAGE_TYPE, MixAll.REPLY_MESSAGE_FLAG);
-            //MessageAccessor.putProperty(rocketMQMsg, MessageConst.PROPERTY_CORRELATION_ID,
-            // rocketMQMsg.getProperty(DeFiBusConstant.PROPERTY_RR_REQUEST_ID));
-            //MessageAccessor.putProperty(rocketMQMsg, MessageConst.PROPERTY_MESSAGE_REPLY_TO_CLIENT,
-            // rocketMQMsg.getProperty(DeFiBusConstant.PROPERTY_MESSAGE_REPLY_TO));
-            // ttl
-            //omsMsg.putSystemProperties(Constants.PROPERTY_MESSAGE_TIMEOUT,
-            // String.valueOf(EventMeshConstants.DEFAULT_TIMEOUT_IN_MILLISECONDS));
-            ////MessageAccessor.putProperty(rocketMQMsg, DeFiBusConstant.PROPERTY_MESSAGE_TTL,
-            // String.valueOf(EventMeshConstants.DEFAULT_TIMEOUT_IN_MILLISECONDS));
-            //omsMsg.putUserProperties(EventMeshConstants.REQ_C2EVENTMESH_TIMESTAMP,
-            // String.valueOf(System.currentTimeMillis()));
             if (messageLogger.isDebugEnabled()) {
                 messageLogger.debug("msg2MQMsg suc, bizSeqNo={}, topic={}", bizNo, replyTopic);
             }
@@ -287,24 +270,6 @@ public class ReplyMessageProcessor implements HttpRequestProcessor {
                         endTime - startTime, replyMQCluster + "-" + EventMeshConstants.RR_REPLY_TOPIC,
                         origTopic, bizNo, uniqueId, context.getException());
                 }
-
-                //@Override
-                //public void onException(Throwable e) {
-                //    HttpCommand err = asyncContext.getRequest().createHttpCommandResponse(
-                //            replyMessageResponseHeader,
-                //            SendMessageResponseBody.buildBody(EventMeshRetCode.EVENTMESH_REPLY_MSG_ERR.getRetCode(),
-                //                    EventMeshRetCode.EVENTMESH_REPLY_MSG_ERR.getErrMsg() + EventMeshUtil.stackTrace(e, 2)));
-                //    asyncContext.onComplete(err, handler);
-                //    long endTime = System.currentTimeMillis();
-                //    eventMeshHTTPServer.metrics.summaryMetrics.recordReplyMsgFailed();
-                //    eventMeshHTTPServer.metrics.summaryMetrics.recordReplyMsgCost(endTime - startTime);
-                //    messageLogger.error("message|eventMesh2mq|RSP|SYNC|reply2MQCost={}|topic={}|origTopic={}|bizSeqNo={}|uniqueId={}",
-                //            endTime - startTime,
-                //            replyMQCluster + "-" + EventMeshConstants.RR_REPLY_TOPIC,
-                //            replyMessageRequestBody.getOrigTopic(),
-                //            replyMessageRequestBody.getBizSeqNo(),
-                //            replyMessageRequestBody.getUniqueId(), e);
-                //}
             });
         } catch (Exception ex) {
             HttpCommand err = asyncContext.getRequest().createHttpCommandResponse(
